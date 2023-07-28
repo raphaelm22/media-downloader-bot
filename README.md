@@ -5,6 +5,7 @@ A Telegram Bot that takes a social media URL and download a video.
 Social media supported:
 1. Twitter
 2. Instagram (stories requires account)
+3. Tiktok
 
 
 ## Dependencies:
