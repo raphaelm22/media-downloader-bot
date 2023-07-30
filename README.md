@@ -4,7 +4,7 @@ A Telegram Bot that takes a social media URL and download a video.
 
 Social media supported:
 1. Twitter
-2. Instagram
+2. Instagram (stories requires account)
 
 
 ## Dependencies:
@@ -34,6 +34,15 @@ Create `appsettings.local.json` file as below:
     "Token": "<type chatbot token>"
   }
 }
+```
+
+**Optional:** Configure Instagram account to download stories videos
+
+```json
+"Instagram": {
+    "Username": "<type username>",
+	"Password": "<type password>"
+  }
 ```
 
 ## Tip: Running on Raspberry OS
