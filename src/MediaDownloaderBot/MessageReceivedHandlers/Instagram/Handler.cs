@@ -3,23 +3,28 @@ using MediaDownloaderBot.Commons;
 using MediaDownloaderBot.Puppeteer;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using PuppeteerSharp;
 
 namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
 {
     internal sealed class Handler : INotificationHandler<MessageReceived>
     {
 
+        const string RequiresAuthenticationError = "Requires Authentication";
+
         readonly IPuppeteerBrowserFactory _browserFactory;
         readonly Options _options;
         readonly ILogger<Handler> _logger;
         readonly HttpClient _httpClient;
         readonly IFileSystem _fileSystem;
+        readonly InstagramUrlParser _instagramUrlParser;
 
         public Handler(IPuppeteerBrowserFactory browserFactory,
             Options options,
             ILogger<Handler> logger,
-            IFileSystem fileSystem, 
-            IHttpClientFactory httpClientFactory
+            IFileSystem fileSystem,
+            IHttpClientFactory httpClientFactory,
+            InstagramUrlParser instagramUrlParser
         )
         {
             _browserFactory = browserFactory;
@@ -27,15 +32,24 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             _logger = logger;
             _httpClient = httpClientFactory.CreateClient("instagram");
             _fileSystem = fileSystem;
+            _instagramUrlParser = instagramUrlParser;
         }
 
         public async Task Handle(MessageReceived notification, CancellationToken cancellationToken)
         {
             try
             {
-                if (!IsIntagramUrl(notification.Message)) return;
+                if (!_instagramUrlParser.TryParse(notification.Message, out var instagramUrl)) return;
 
-                await TryGetMp4UrlAsync(notification.Message, cancellationToken)
+                await using var browser = await _browserFactory.CreateAsync();
+
+                await TryGetMp4UrlAsync(browser, instagramUrl, cancellationToken)
+                    .OnFailureCompensate(error =>
+                        error == RequiresAuthenticationError && _options.HasAuthenticationData
+                            ? DoLoginAsync(browser, notification.Reply, cancellationToken)
+                                .Bind(_ => TryGetMp4UrlAsync(browser, instagramUrl, cancellationToken))
+                            : Task.FromResult(Result.Failure<string>(error))
+                        )
                     .Bind(mp4Url => DownloadAsync(mp4Url, cancellationToken))
                     .Tap(videoPath => SendVideoAsync(videoPath, notification.Reply, cancellationToken))
                     .Tap(_fileSystem.SilenceDeleteFile)
@@ -48,49 +62,78 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             }
         }
 
-        bool IsIntagramUrl(string message)
+        async Task<Result<string>> TryGetMp4UrlAsync(IBrowser browser, InstagramUrl instagramUrl, CancellationToken cancellationToken)
         {
-            if (!Uri.TryCreate(message, UriKind.Absolute, out var url)) return false;
-            return url.Host.EndsWith("instagram.com");
-        }
-
-        async Task<Result<string>> TryGetMp4UrlAsync(string url, CancellationToken cancellationToken)
-        {
-            string? mp4Url = null;
-
             using var resetEvent = new AutoResetEvent(false);
 
-            await using var browser = await _browserFactory.CreateAsync();
-            var browserContext = await browser.CreateIncognitoBrowserContextAsync();
-            using var page = await browserContext.NewPageAsync();
-            page.Response += (sender, e) =>
+            Result<string>? mp4Url = null;
+
+            await using var page = await instagramUrl.CreatePageAsync(browser);
+            page.Response += async (sender, e) =>
             {
                 if (cancellationToken.IsCancellationRequested) return;
 
-                if (!Uri.TryCreate(e.Response.Url, UriKind.Absolute, out var url)) return;
-                if (!url.Segments.Last().EndsWith(".mp4")) return;
-
-                mp4Url = e.Response.Url;
-                resetEvent.Set();
+                var mediaResource = await instagramUrl.TryGetMediaResource(e.Response);
+                if (mediaResource != null)
+                {
+                    mp4Url = mediaResource;
+                    resetEvent.Set();
+                }
             };
 
-            _logger.LogInformation("Accessing post: {url}", url);
+            _logger.LogInformation("Accessing post: {url}", instagramUrl.Url.ToString());
 
-            await page.GoToAsync(url);
+            await page.GoToAsync(instagramUrl.Url.ToString(), WaitUntilNavigation.Networkidle0);
+            if (await RequiresAuthenticationAsync(page))
+            {
+                _logger.LogInformation(RequiresAuthenticationError);
+                return Result.Failure<string>(RequiresAuthenticationError);
+            }
 
             var timeoutOccurred = await Task.Run(() => resetEvent.WaitOne(_options.OpenPostTimeout), cancellationToken);
 
-            return mp4Url != null
-                ? Result.Success(mp4Url)
-                : Result.Failure<string>(timeoutOccurred ? "Timeout to find the video, try again later" : "No video was found");
+            return mp4Url ?? Result.Failure<string>(timeoutOccurred
+                ? "Timeout to find the video, try again later"
+                : "No video was found"
+            );
         }
 
-        async Task<Result<string>> DownloadAsync(string url, CancellationToken cancellationToken)
+        async Task<bool> RequiresAuthenticationAsync(IPage page)
+        {
+            var goBackToInstagramElement = await page.QuerySelectorAsync("[role='main'] a[tabindex='0'][href='/']");
+            if (goBackToInstagramElement != null) return true;
+
+            var inputPasswordElement = await page.QuerySelectorAsync("input[type=password]");
+            if (inputPasswordElement != null) return true;
+
+            return false;
+        }
+
+        async Task<Result<string>> DoLoginAsync(IBrowser browser, IReply reply, CancellationToken cancellation)
+        {
+            _logger.LogInformation("Logging in...");
+            await reply.SendMessageAsync("It requires authentication, logging in...", cancellation);
+
+            await using var page = await browser.NewPageAsync();
+            await page.GoToAsync("https://www.instagram.com/accounts/login/", WaitUntilNavigation.DOMContentLoaded);
+
+            var usernameInputSelector = "input[name='username']";
+            await page.WaitForSelectorAsync(usernameInputSelector);
+
+            await page.TypeAsync(usernameInputSelector, _options.Username);
+            await page.TypeAsync("input[name='password']", _options.Password);
+            await page.ClickAsync("button[type='submit']");
+            await page.WaitForNavigationAsync(new() { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded } });
+
+            return "Success!";
+        }
+
+        async Task<Result<string>> DownloadAsync(string mp4Url, CancellationToken cancellationToken)
         {
             var fileName = _fileSystem.CreateTempFile(".mp4");
             _logger.LogInformation("Starting download: {temp-file}", fileName);
 
-            using var response = await _httpClient.GetAsync(url, cancellationToken);
+            using var response = await _httpClient.GetAsync(mp4Url, cancellationToken);
             using var fileStream = new FileStream(fileName, FileMode.OpenOrCreate);
             await response.Content.CopyToAsync(fileStream, cancellationToken);
 
@@ -117,6 +160,5 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             _logger.LogInformation("Video sent");
             return Task.CompletedTask;
         }
-
     }
 }

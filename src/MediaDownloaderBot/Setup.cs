@@ -92,7 +92,13 @@ namespace MediaDownloaderBot
 
         static void AddInstagram(ServiceCollection services, IConfiguration configurations)
         {
-            services.AddHttpClient("instagram", c => c.BaseAddress = new Uri("https://instagram.com"));
+            services.TryAddSingleton<MessageReceivedHandlers.Instagram.InstagramUrlParser>();
+
+            services.AddHttpClient("instagram", client =>
+            {
+                client.BaseAddress = new Uri("https://instagram.com");
+                client.DefaultRequestHeaders.TryAddWithoutValidation("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
+            });
 
             services.TryAddSingleton(configurations
                 .GetSection("Instagram")

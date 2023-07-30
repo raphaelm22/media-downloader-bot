@@ -17,7 +17,11 @@ namespace MediaDownloaderBot.Puppeteer
 
         public async Task<IBrowser> CreateAsync()
         {
-            LaunchOptions launchOptions;
+            var launchOptions = new LaunchOptions()
+            {
+                UserDataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "browser_userdata")
+            };
+
             if (string.IsNullOrWhiteSpace(_options.ExecutablePath))
             {
                 using var browserFetcher = new BrowserFetcher();
@@ -25,16 +29,11 @@ namespace MediaDownloaderBot.Puppeteer
                 _logger.LogInformation("Starting the download of Puppeteer Browser...");
                 await browserFetcher.DownloadAsync();
                 _logger.LogInformation("Download finished");
-
-                launchOptions = new();
             }
             else
             {
-                launchOptions = new()
-                {
-                    ExecutablePath = _options.ExecutablePath,
-                    Args = _options.Args
-                };
+                launchOptions.ExecutablePath = _options.ExecutablePath;
+                launchOptions.Args = _options.Args;
             }
 
             _logger.LogInformation("Opening Browser");
