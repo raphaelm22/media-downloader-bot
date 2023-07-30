@@ -35,6 +35,8 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Tiktok
             {
                 if (!IsTiktokUrl(notification.Message)) return;
 
+                await notification.Reply.SendFindingVideoMessageAsync(cancellationToken);
+
                 await GetVideoRequestAsync(notification.Message, cancellationToken)
                     .Bind(request => DownloadAsync(request, cancellationToken))
                     .Tap(videoPath => SendVideoAsync(videoPath, notification.Reply, cancellationToken))

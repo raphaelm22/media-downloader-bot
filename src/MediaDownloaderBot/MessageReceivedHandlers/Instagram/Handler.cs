@@ -41,6 +41,8 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             {
                 if (!_instagramUrlParser.TryParse(notification.Message, out var instagramUrl)) return;
 
+                await notification.Reply.SendFindingVideoMessageAsync(cancellationToken);
+
                 await using var browser = await _browserFactory.CreateAsync();
 
                 await TryGetMp4UrlAsync(browser, instagramUrl, cancellationToken)

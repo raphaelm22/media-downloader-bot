@@ -38,6 +38,8 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.TwitterVideoDownload
             {
                 if (!_tweetUrlParser.TryParse(notification.Message, out var postId)) return;
 
+                await notification.Reply.SendFindingVideoMessageAsync(cancellationToken);
+
                 await TryGetPlaybackUrlAsync(postId, cancellationToken)
                     .Bind(mp4Url => DownloadAsync(mp4Url, cancellationToken))
                     .Tap(videoPath => SendVideoAsync(videoPath, postId, notification.Reply, cancellationToken))
