@@ -30,6 +30,7 @@ namespace MediaDownloaderBot
             AddTelegram(services, configurations);
             AddTwitter(services, configurations);
             AddInstagram(services, configurations);
+            AddTiktok(services, configurations);
         }
 
         private static void AddLogging(ServiceCollection services)
@@ -106,5 +107,17 @@ namespace MediaDownloaderBot
                 ?? new()
             );
         }
+
+        static void AddTiktok(ServiceCollection services, IConfiguration configurations)
+        {
+            services.AddHttpClient("tiktok", c => c.BaseAddress = new Uri("https://tiktok.com"));
+
+            services.TryAddSingleton(configurations
+                .GetSection("Tiktok")
+                .Get<MessageReceivedHandlers.Tiktok.Options>()
+                ?? new()
+            );
+        }
+
     }
 }
