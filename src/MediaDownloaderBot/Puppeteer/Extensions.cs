@@ -14,5 +14,12 @@ namespace MediaDownloaderBot.Puppeteer
 
             return request;
         }
+
+
+        public static async Task CopyCookiesAsync(this IPage page, HttpRequestMessage requestMessage)
+        {
+            var cookies = await page.GetCookiesAsync();
+            requestMessage.Headers.TryAddWithoutValidation("cookie", cookies.Select(c => $"{c.Name}={c.Value}"));
+        }
     }
 }

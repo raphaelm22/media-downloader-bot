@@ -30,6 +30,16 @@ namespace MediaDownloaderBot.Telegram
 
         public Task SendVideoAsync(Stream stream, string fileName, CancellationToken cancellationToken)
         {
+            const int limit = 50 * 1024 * 1024;
+
+            if (stream.Length > limit)
+                return _telegramBotClient.SendTextMessageAsync(
+                    _chatId,
+                    $"😢 Sorry, but the video is to long, the bot just can send video less than 50Mb, this video has {stream.Length / 1024 / 1024}Mb.",
+                    replyToMessageId: _messageId,
+                    cancellationToken: cancellationToken
+                );
+
             var file = InputFile.FromStream(stream, fileName);
             return _telegramBotClient.SendVideoAsync(
                 _chatId, 
