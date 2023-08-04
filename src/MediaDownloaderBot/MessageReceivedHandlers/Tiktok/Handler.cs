@@ -75,9 +75,7 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Tiktok
                 if (!query.TryGetValue("mime_type", out var mimeType) || mimeType != "video_mp4") return;
                 if (!query.TryGetValue("qs", out var qs) || qs != "0") return;
 
-                videoRequest = new HttpRequestMessage(HttpMethod.Get, e.Response.Request.Url);
-                foreach (var header in e.Response.Request.Headers)
-                    videoRequest.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                videoRequest = e.Response.CreateHttpRequestMenssage();
 
                 resetEvent.Set();
             };
