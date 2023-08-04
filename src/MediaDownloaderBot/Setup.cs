@@ -94,6 +94,9 @@ namespace MediaDownloaderBot
         static void AddInstagram(ServiceCollection services, IConfiguration configurations)
         {
             services.TryAddSingleton<MessageReceivedHandlers.Instagram.InstagramUrlParser>();
+            services.TryAddSingleton<MessageReceivedHandlers.Instagram.MediaHandlerFactory>();
+            services.TryAddSingleton<MessageReceivedHandlers.Instagram.RealsHandler>();
+            services.TryAddSingleton<MessageReceivedHandlers.Instagram.StorieHandler>();
 
             services.AddHttpClient("instagram", client =>
             {
