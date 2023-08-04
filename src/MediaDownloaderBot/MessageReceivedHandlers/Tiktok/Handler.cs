@@ -4,6 +4,7 @@ using MediaDownloaderBot.Puppeteer;
 using MediatR;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
+using PuppeteerSharp;
 
 namespace MediaDownloaderBot.MessageReceivedHandlers.Tiktok
 {
@@ -63,9 +64,10 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Tiktok
             HttpRequestMessage? videoRequest = null;
 
             await using var browser = await _browserFactory.CreateAsync();
-            using var page = await browser.NewPageAsync();
-            await page.SetUserAgentAsync("Mozilla/5.0 (Linux; Android 10; SM-A205U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5790.136 Mobile Safari/537.36");
-            page.Response += (sender, e) =>
+            var incognitoBrowserContext = await browser.CreateIncognitoBrowserContextAsync();
+            using var page = await incognitoBrowserContext.NewPageAsync();
+            await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
+            page.Response += async (sender, e) =>
             {
                 if (cancellationToken.IsCancellationRequested) return;
 
@@ -73,16 +75,16 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Tiktok
 
                 var query = QueryHelpers.ParseQuery(url.Query);
                 if (!query.TryGetValue("mime_type", out var mimeType) || mimeType != "video_mp4") return;
-                if (!query.TryGetValue("qs", out var qs) || qs != "0") return;
 
                 videoRequest = e.Response.CreateHttpRequestMenssage();
+                await page.CopyCookiesAsync(videoRequest);
 
                 resetEvent.Set();
             };
 
             _logger.LogInformation("Opening page: {url}", url);
 
-            await page.GoToAsync(url);
+            await page.GoToAsync(url, WaitUntilNavigation.DOMContentLoaded);
 
             var timeoutOccurred = await Task.Run(() => resetEvent.WaitOne(_options.OpenPostTimeout), cancellationToken);
 
@@ -94,6 +96,7 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Tiktok
         async Task<Result<string>> DownloadAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Starting download...");
+
             using var response = await _httpClient.SendAsync(request, cancellationToken);
 
             var fileName = _fileSystem.CreateTempFile(".mp4");
@@ -105,6 +108,7 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Tiktok
         async Task SendVideoAsync(string path, IReply reply, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Sending video...");
+            await reply.SendingVideoMessageAsync(cancellationToken);
 
             var fileInfo = new FileInfo(path);
             using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
