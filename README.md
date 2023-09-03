@@ -6,6 +6,7 @@ Social media supported:
 1. Twitter
 2. Instagram (stories requires account)
 3. Tiktok
+3. Youtube (only *shorts* videos)
 
 
 ## Dependencies:

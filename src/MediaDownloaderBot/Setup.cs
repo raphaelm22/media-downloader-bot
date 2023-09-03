@@ -31,6 +31,7 @@ namespace MediaDownloaderBot
             AddTwitter(services, configurations);
             AddInstagram(services, configurations);
             AddTiktok(services, configurations);
+            AddYoutube(services);
         }
 
         private static void AddLogging(ServiceCollection services)
@@ -120,6 +121,13 @@ namespace MediaDownloaderBot
                 .Get<MessageReceivedHandlers.Tiktok.Options>()
                 ?? new()
             );
+        }
+
+        static void AddYoutube(ServiceCollection services)
+        {
+            services.AddHttpClient("youtube", c => c.BaseAddress = new Uri("https://www.youtube.com"));
+
+            services.TryAddScoped<MessageReceivedHandlers.Youtube.YoutubeUrlParser >();
         }
 
     }
