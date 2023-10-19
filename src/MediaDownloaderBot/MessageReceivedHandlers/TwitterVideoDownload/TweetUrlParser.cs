@@ -9,7 +9,7 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.TwitterVideoDownload
             postId = null;
 
             if (!Uri.TryCreate(postUrl, UriKind.Absolute, out var url)) return false;
-            if (url.Host != "twitter.com") return false;
+            if (url.Host != "twitter.com" && url.Host != "x.com") return false;
 
             var lastSegment = url.Segments.Last();
 
