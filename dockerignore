@@ -1,0 +1,9 @@
+# directories
+**/[b|B]in/
+**/[o|O]bj/
+**/[o|O]ut/
+.cr/
+.vs/
+
+# files
+Dockerfile*
