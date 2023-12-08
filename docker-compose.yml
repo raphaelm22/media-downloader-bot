@@ -1,0 +1,8 @@
+version: '3.8'
+services:
+  daemon:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    volumes:
+      - './appsettings.local.json:/app/appsettings.local.json'

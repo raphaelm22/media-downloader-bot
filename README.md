@@ -43,18 +43,13 @@ Create `appsettings.local.json` file as below:
 ```json
 "Instagram": {
     "Username": "<type username>",
-	"Password": "<type password>"
+    "Password": "<type password>"
   }
 ```
 
 ## Tip: Running on Raspberry OS
 
-1. Install chromium:
-```bash
-sudo apt install chromium
-```
-
-2. Configure browser on `appsettings.local.json` file adding this lines:
+1. Configure browser on `appsettings.local.json` file adding this lines:
 ```json
 "PuppeteerBrowser": {
     "ExecutablePath": "/usr/bin/chromium",
@@ -67,4 +62,17 @@ sudo apt install chromium
     ]
 }
 ```
+
+2.1 Using Docker Compose
+```bash
+ docker compose up -d
+```
+
+2.2 Manually
+```bash
+sudo apt install -y chromium
+./mediaDownloaderBot
+```
+
+
 

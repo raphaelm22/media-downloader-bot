@@ -127,7 +127,7 @@ namespace MediaDownloaderBot
         {
             services.AddHttpClient("youtube", c => c.BaseAddress = new Uri("https://www.youtube.com"));
 
-            services.TryAddScoped<MessageReceivedHandlers.Youtube.YoutubeUrlParser >();
+            services.TryAddScoped<MessageReceivedHandlers.Youtube.YoutubeUrlParser>();
         }
 
     }

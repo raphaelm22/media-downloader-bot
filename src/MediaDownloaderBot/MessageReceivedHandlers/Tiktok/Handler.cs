@@ -2,9 +2,9 @@
 using MediaDownloaderBot.Commons;
 using MediaDownloaderBot.Puppeteer;
 using MediatR;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using PuppeteerSharp;
+using System.Web;
 
 namespace MediaDownloaderBot.MessageReceivedHandlers.Tiktok
 {
@@ -73,8 +73,9 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Tiktok
 
                 if (!Uri.TryCreate(e.Response.Url, UriKind.Absolute, out var url)) return;
 
-                var query = QueryHelpers.ParseQuery(url.Query);
-                if (!query.TryGetValue("mime_type", out var mimeType) || mimeType != "video_mp4") return;
+                var query = HttpUtility.ParseQueryString(url.Query);
+                var mimeType = query.Get("mime_type");
+                if (mimeType != "video_mp4") return;
 
                 videoRequest = e.Response.CreateHttpRequestMenssage();
                 await page.CopyCookiesAsync(videoRequest);
