@@ -2,7 +2,7 @@
 {
     internal sealed class Options
     {
-        public TimeSpan OpenPostTimeout { get; set; } = TimeSpan.FromSeconds(30);
+        public TimeSpan OpenPostTimeout { get; set; } = TimeSpan.FromSeconds(15);
         public string Username { get; set; } = "";
         public string Password { get; set; } = "";
 

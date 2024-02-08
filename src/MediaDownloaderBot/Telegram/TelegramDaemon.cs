@@ -28,7 +28,7 @@ namespace MediaDownloaderBot.Telegram
         {
             var receiverOptions = new ReceiverOptions()
             {
-                AllowedUpdates = new[] { UpdateType.Message }
+                AllowedUpdates = [UpdateType.Message]
             };
             _telegramBotClient.StartReceiving(HandleUpdateAsync, PollingErrorHandler, receiverOptions, cancellationToken);
 

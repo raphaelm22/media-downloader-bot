@@ -52,10 +52,10 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
                         error == RequiresAuthenticationError && _options.HasAuthenticationData
                             ? DoLoginAsync(browser, notification.Reply, cancellationToken)
                                 .Bind(_ => TryGetMp4UrlAsync(browser, instagramUrl, cancellationToken))
-                            : Task.FromResult(Result.Failure<HttpRequestMessage>(error))
+                            : Task.FromResult(Result.Failure<IEnumerable<HttpRequestMessage>>(error))
                         )
                     .Bind(mp4Url => DownloadAsync(mp4Url, cancellationToken))
-                    .Tap(videoPath => SendVideoAsync(videoPath, notification.Reply, cancellationToken))
+                    .Tap(videoPath => SendVideosAsync(videoPath, notification.Reply, cancellationToken))
                     .Tap(_fileSystem.SilenceDeleteFile)
                     .Match(OnSuccess, error => OnFailure(error, notification.Reply, cancellationToken));
             }
@@ -66,11 +66,9 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             }
         }
 
-        async Task<Result<HttpRequestMessage>> TryGetMp4UrlAsync(IBrowser browser, InstagramUrl instagramUrl, CancellationToken cancellationToken)
+        async Task<Result<IEnumerable<HttpRequestMessage>>> TryGetMp4UrlAsync(IBrowser browser, InstagramUrl instagramUrl, CancellationToken cancellationToken)
         {
-            using var resetEvent = new AutoResetEvent(false);
-
-            Result<HttpRequestMessage>? requestVideo = null;
+            var requestVideos = new List<HttpRequestMessage>();
             var mediaHandler = _mediaHandlerFactory.Create(instagramUrl);
 
             await using var page = await mediaHandler.CreatePageAsync(browser);
@@ -83,10 +81,7 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
                     onSuccess: resource =>
                     {
                         if (resource != null)
-                        {
-                            requestVideo = resource;
-                            resetEvent.Set();
-                        }
+                            requestVideos.Add(resource);
                     },
                     onFailure: error => Result.Failure<HttpRequestMessage>(error)
                 );
@@ -95,18 +90,31 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             _logger.LogInformation("Accessing post: {url}", instagramUrl.Url.ToString());
 
             await page.GoToAsync(instagramUrl.Url.ToString(), WaitUntilNavigation.DOMContentLoaded);
+
             if (await RequiresAuthenticationAsync(page))
             {
                 _logger.LogInformation(RequiresAuthenticationError);
-                return Result.Failure<HttpRequestMessage>(RequiresAuthenticationError);
+                return Result.Failure<IEnumerable<HttpRequestMessage>>(RequiresAuthenticationError);
             }
 
-            var timeoutOccurred = await Task.Run(() => resetEvent.WaitOne(_options.OpenPostTimeout), cancellationToken);
+            await mediaHandler.NavigateOnPageAsync(page);
+            var timeoutOccurred = false;
+            try
+            {
+                await page.WaitForNetworkIdleAsync(new () { Timeout = (int)_options.OpenPostTimeout.TotalMilliseconds });
+            }
+            catch (TimeoutException)
+            {
+                timeoutOccurred = true;
+            }
 
-            return requestVideo ?? Result.Failure<HttpRequestMessage>(timeoutOccurred
-                ? "Timeout to find the video, try again later"
-                : "No video was found"
-            );
+            return requestVideos.Count == 0
+                ? Result.Failure<IEnumerable<HttpRequestMessage>>(
+                    timeoutOccurred
+                        ? "Timeout to find the video, try again later"
+                        : "No video was found"
+                )
+                : requestVideos;
         }
 
         async Task<bool> RequiresAuthenticationAsync(IPage page)
@@ -134,31 +142,44 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             await page.TypeAsync(usernameInputSelector, _options.Username);
             await page.TypeAsync("input[name='password']", _options.Password);
             await page.ClickAsync("button[type='submit']");
-            await page.WaitForNavigationAsync(new() { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded } });
+            await page.WaitForNavigationAsync(new() { WaitUntil = [WaitUntilNavigation.DOMContentLoaded] });
 
             return "Success!";
         }
 
-        async Task<Result<string>> DownloadAsync(HttpRequestMessage req, CancellationToken cancellationToken)
+        async Task<Result<IEnumerable<string>>> DownloadAsync(IEnumerable<HttpRequestMessage> requests, CancellationToken cancellationToken)
         {
-            var fileName = _fileSystem.CreateTempFile(".mp4");
-            _logger.LogInformation("Starting download: {temp-file}", fileName);
+            var filePaths = new List<string>();
 
-            using var response = await _httpClient.SendAsync(req, cancellationToken);
-            using var fileStream = new FileStream(fileName, FileMode.OpenOrCreate);
-            await response.Content.CopyToAsync(fileStream, cancellationToken);
+            foreach (var request in requests)
+            {
+                var fileName = _fileSystem.CreateTempFile(".mp4");
+                _logger.LogInformation("Starting download: {temp-file}", fileName);
 
-            return fileName;
+                using var response = await _httpClient.SendAsync(request, cancellationToken);
+                using var fileStream = new FileStream(fileName, FileMode.OpenOrCreate);
+                await response.Content.CopyToAsync(fileStream, cancellationToken);
+
+                filePaths.Add(fileName);
+            }
+
+            return filePaths;
         }
 
-        async Task SendVideoAsync(string path, IReply reply, CancellationToken cancellationToken)
+        async Task SendVideosAsync(IEnumerable<string> filePaths, IReply reply, CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Sending video...");
-            await reply.SendingVideoMessageAsync(cancellationToken);
+            if (filePaths.Count() > 1)
+                await reply.SendVideoCountMessageAsync(filePaths.Count(), cancellationToken);
 
-            var fileInfo = new FileInfo(path);
-            using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
-            await reply.SendVideoAsync(fileStream, fileInfo.Name, cancellationToken);
+            foreach (string path in filePaths)
+            {
+                _logger.LogInformation("Sending video...");
+                await reply.SendingVideoMessageAsync(cancellationToken);
+
+                var fileInfo = new FileInfo(path);
+                using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
+                await reply.SendVideoAsync(fileStream, fileInfo.Name, cancellationToken);
+            }
         }
 
         private async Task OnFailure(string message, IReply reply, CancellationToken cancellationToken)
@@ -167,9 +188,9 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             await reply.SendMessageAsync(message, cancellationToken);
         }
 
-        private Task OnSuccess(string arg)
+        private Task OnSuccess(IEnumerable<string> videos)
         {
-            _logger.LogInformation("Video sent");
+            _logger.LogInformation("{count} videos were sent", videos.Count());
             return Task.CompletedTask;
         }
     }
