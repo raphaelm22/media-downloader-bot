@@ -1,7 +1,7 @@
 ﻿using CSharpFunctionalExtensions;
 using MediaDownloaderBot.Puppeteer;
-using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using PuppeteerSharp;
 
 namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
@@ -10,17 +10,46 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
     {
         public async Task<IPage> CreatePageAsync(IBrowser browser)
         {
-            return await browser.NewPageAsync();
+            var page = await browser.NewPageAsync();
+            return page;
         }
+
+        public async Task NavigateOnPageAsync(IPage page)
+        {
+            await page.WaitForSelectorAsync("div[id]");
+        }
+
+       
 
         public async Task<Result<HttpRequestMessage?>> TryGetMediaResourceAsync(IResponse resourceResponse, InstagramUrl originUrl)
         {
-            if (!resourceResponse.Url.Contains("instagram.com/api/v1/feed/reels_media/"))
-                return Result.Success<HttpRequestMessage?>(null);
+            if (
+                Uri.TryCreate(resourceResponse.Url, UriKind.Absolute, out var url) &&
+                url.Segments.Last().Trim('/') == originUrl.Pk &&
+                string.IsNullOrWhiteSpace(url.Query)
+            )
+            {
+                var frame = ((Response)resourceResponse).Frame;
 
-            var content = await resourceResponse.TextAsync();
-            return GetMp4UrlFromStories(content, originUrl)
-                .Bind(url => CreateRequest(resourceResponse, url));
+                await frame.WaitForSelectorAsync("div[id]");
+                var scripts = await frame.EvaluateExpressionAsync<IEnumerable<string>>(
+                    "[...document.querySelectorAll('script[type=\"application/json\"][data-sjs]')].map(s => s.innerText)"
+                );
+
+                var all = scripts.Select(script => GetMp4UrlFromStories(script, originUrl)).ToList();
+
+                var videoUrlResults = all
+                    .OrderByDescending(result => result.IsSuccess)
+                    .FirstOrDefault();
+
+                return videoUrlResults.Match(
+                    onSuccess: videoUrl => Result.Success(videoUrl)
+                        .Bind(url => CreateRequest(resourceResponse, url)),
+                    onFailure: Result.Failure<HttpRequestMessage?>
+                );
+            }
+
+            return Result.Success<HttpRequestMessage?>(null);
         }
 
         Result<string> GetMp4UrlFromStories(string content, InstagramUrl originUrl)
@@ -29,7 +58,8 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             if (jsonData == null)
                 return Result.Failure<string>("Error reading the API response.");
 
-            var itemJson = jsonData.SelectToken("$.reels.*.items");
+            var reelsPath = FindReelsMediaPath(jsonData);
+            var itemJson = jsonData.SelectToken($"{reelsPath}[*].items");
             if (itemJson == null)
                 return Result.Failure<string>("No video was found.");
 
@@ -37,9 +67,11 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
 
             var item = items.FirstOrDefault(item => item.Pk == originUrl.Pk);
 
-            if (item == null || !item.Videos.Any()) return Result.Failure<string>("No video was found");
+            if (item == null || item.Videos.Count == 0) return Result.Failure<string>("No video was found");
 
-            var video = item.Videos.OrderByDescending(video => video.Height * video.Width).First();
+            var video = item.Videos
+                .OrderByDescending(video => video.Type)
+                .First();
 
             return video.Url;
         }
@@ -61,10 +93,47 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
 
             internal sealed class VideoVersionModel
             {
-                public int Height { get; set; }
-                public int Width { get; set; }
+                public int Type { get; set; }
                 public string Url { get; set; } = "";
             }
         }
+
+
+        static string? FindReelsMediaPath(JToken? token)
+        {
+            if (token == null) return null;
+
+            var typeFilter = new[] { JTokenType.Array, JTokenType.Object, JTokenType.Property };
+            if (!typeFilter.Contains(token.Type)) return null;
+
+            if (token.Type == JTokenType.Object)
+            {
+                foreach (var child in token.Children())
+                {
+                    var path = FindReelsMediaPath(child);
+                    if (path != null) return path;
+                }
+            }
+            if (token.Type == JTokenType.Array)
+            {
+                foreach (var item in token)
+                {
+                    var path = FindReelsMediaPath(item);
+                    if (path != null) return path;
+
+                }
+            }
+
+            if (token.Type == JTokenType.Property)
+            {
+                if (token is JProperty jProp && jProp.Name == "reels_media")
+                    return jProp.Path;
+
+                return FindReelsMediaPath(token.First);
+            }
+
+            return null;
+        }
     }
+
 }

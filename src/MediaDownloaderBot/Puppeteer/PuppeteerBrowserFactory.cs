@@ -21,6 +21,9 @@ namespace MediaDownloaderBot.Puppeteer
             {
                 UserDataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "browser_userdata")
             };
+#if DEBUG
+            launchOptions.Headless = false;
+#endif
 
             if (string.IsNullOrWhiteSpace(_options.ExecutablePath))
             {

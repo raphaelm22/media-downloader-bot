@@ -23,6 +23,12 @@ namespace MediaDownloaderBot.Commons
             }
         }
 
+        public void SilenceDeleteFile(IEnumerable<string> paths)
+        {
+            foreach (string path in paths)
+                SilenceDeleteFile(path);
+        }
+
         public string CreateTempFile(string extension)
         {
             return Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():n}{extension}");

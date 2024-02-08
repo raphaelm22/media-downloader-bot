@@ -11,5 +11,10 @@
         {
             return reply.SendMessageAsync("📤 Wait! Sending...", cancellationToken);
         }
+
+        public static Task SendVideoCountMessageAsync(this IReply reply, int count, CancellationToken cancellationToken)
+        {
+            return reply.SendMessageAsync($" {count} videos were found", cancellationToken);
+        }
     }
 }
