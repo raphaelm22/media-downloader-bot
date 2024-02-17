@@ -30,6 +30,18 @@ namespace MediaDownloaderBot.Telegram
             );
         }
 
+        public Task SendPhotoAsync(Stream stream, CancellationToken cancellationToken)
+        {
+            var file = InputFile.FromStream(stream);
+
+            return _telegramBotClient.SendPhotoAsync(
+                _chatId,
+                file,
+                replyToMessageId: _messageId,
+                cancellationToken: cancellationToken
+            );
+        }
+
         public Task SendVideoAsync(Stream stream, string fileName, CancellationToken cancellationToken)
         {
             if (stream.Length > VideoMaxLenght)

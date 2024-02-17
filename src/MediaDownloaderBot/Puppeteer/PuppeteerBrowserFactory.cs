@@ -8,7 +8,6 @@ namespace MediaDownloaderBot.Puppeteer
         readonly Options _options;
         readonly ILogger _logger;
 
-
         public PuppeteerBrowserFactory(Options options, ILogger<PuppeteerBrowserFactory> logger)
         {
             _options = options;

@@ -47,11 +47,11 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
 
                 await using var browser = await _browserFactory.CreateAsync();
 
-                await TryGetMp4UrlAsync(browser, instagramUrl, cancellationToken)
+                await TryGetMp4UrlAsync(browser, instagramUrl, notification.Reply, cancellationToken)
                     .OnFailureCompensate(error =>
                         error == RequiresAuthenticationError && _options.HasAuthenticationData
                             ? DoLoginAsync(browser, notification.Reply, cancellationToken)
-                                .Bind(_ => TryGetMp4UrlAsync(browser, instagramUrl, cancellationToken))
+                                .Bind(_ => TryGetMp4UrlAsync(browser, instagramUrl, notification.Reply, cancellationToken))
                             : Task.FromResult(Result.Failure<IEnumerable<HttpRequestMessage>>(error))
                         )
                     .Bind(mp4Url => DownloadAsync(mp4Url, cancellationToken))
@@ -66,7 +66,7 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             }
         }
 
-        async Task<Result<IEnumerable<HttpRequestMessage>>> TryGetMp4UrlAsync(IBrowser browser, InstagramUrl instagramUrl, CancellationToken cancellationToken)
+        async Task<Result<IEnumerable<HttpRequestMessage>>> TryGetMp4UrlAsync(IBrowser browser, InstagramUrl instagramUrl, IReply reply, CancellationToken cancellationToken)
         {
             var requestVideos = new List<HttpRequestMessage>();
             var mediaHandler = _mediaHandlerFactory.Create(instagramUrl);
@@ -91,47 +91,71 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
 
             await page.GoToAsync(instagramUrl.Url.ToString(), WaitUntilNavigation.DOMContentLoaded);
 
-            if (await RequiresAuthenticationAsync(page))
-            {
-                _logger.LogInformation(RequiresAuthenticationError);
-                return Result.Failure<IEnumerable<HttpRequestMessage>>(RequiresAuthenticationError);
-            }
-
-            await mediaHandler.NavigateOnPageAsync(page);
             var timeoutOccurred = false;
             try
             {
+                await mediaHandler.NavigateOnPageAsync(page);
                 await page.WaitForNetworkIdleAsync(new () { Timeout = (int)_options.OpenPostTimeout.TotalMilliseconds });
+            }
+            catch (WaitTaskTimeoutException)
+            {
+                timeoutOccurred = true;
             }
             catch (TimeoutException)
             {
                 timeoutOccurred = true;
             }
 
-            return requestVideos.Count == 0
-                ? Result.Failure<IEnumerable<HttpRequestMessage>>(
+            if (requestVideos.Count == 0)
+            {
+                if (await RequiresAuthenticationAsync(page))
+                {
+                    _logger.LogInformation(RequiresAuthenticationError);
+                    return Result.Failure<IEnumerable<HttpRequestMessage>>(RequiresAuthenticationError);
+                }
+
+                await reply.SendScreenshotMessageAsync(page, cancellationToken);
+
+                return Result.Failure<IEnumerable<HttpRequestMessage>>(
                     timeoutOccurred
-                        ? "Timeout to find the video, try again later"
+                        ? "Timeout to find the video. Try again later"
                         : "No video was found"
-                )
-                : requestVideos;
+                    );
+            }
+
+            return requestVideos;
         }
 
         async Task<bool> RequiresAuthenticationAsync(IPage page)
         {
-            var goBackToInstagramElement = await page.QuerySelectorAsync("[role='main'] a[tabindex='0'][href='/']");
-            if (goBackToInstagramElement != null) return true;
+            var url = new Uri(page.Url);
+            if (url.AbsolutePath == "/accounts/login/") return true;
 
-            var inputPasswordElement = await page.QuerySelectorAsync("input[type=password]");
-            if (inputPasswordElement != null) return true;
+            try
+            {
+                var requiresAuthenticationEvidencies = new[] {
+                    "input[type='password']", 
+                    "a[href^='/accounts/login']" 
+                };
 
-            return false;
+                var result = await Task.WhenAny(
+                    requiresAuthenticationEvidencies.Select(selector =>
+                        page.WaitForSelectorAsync(selector, new () { Timeout = 10 * 1000 })
+                    )
+                );
+
+                return result.Status != TaskStatus.Faulted;
+            }
+            catch (WaitTaskTimeoutException)
+            {
+                return false;
+            }
         }
 
         async Task<Result<string>> DoLoginAsync(IBrowser browser, IReply reply, CancellationToken cancellation)
         {
-            _logger.LogInformation("Logging in...");
-            await reply.SendMessageAsync("It requires authentication, logging in...", cancellation);
+            _logger.LogInformation("Authenticating...");
+            await reply.SendMessageAsync("🔐 It requires authentication. Authenticating...", cancellation);
 
             await using var page = await browser.NewPageAsync();
             await page.GoToAsync("https://www.instagram.com/accounts/login/", WaitUntilNavigation.DOMContentLoaded);
