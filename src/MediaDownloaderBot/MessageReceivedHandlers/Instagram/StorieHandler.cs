@@ -3,6 +3,7 @@ using MediaDownloaderBot.Puppeteer;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PuppeteerSharp;
+using System.Net;
 
 namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
 {
@@ -19,14 +20,12 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
             await page.WaitForSelectorAsync("div[id]");
         }
 
-       
-
         public async Task<Result<HttpRequestMessage?>> TryGetMediaResourceAsync(IResponse resourceResponse, InstagramUrl originUrl)
         {
             if (
                 Uri.TryCreate(resourceResponse.Url, UriKind.Absolute, out var url) &&
                 url.Segments.Last().Trim('/') == originUrl.Pk &&
-                string.IsNullOrWhiteSpace(url.Query)
+                resourceResponse.Status == HttpStatusCode.OK
             )
             {
                 var frame = ((Response)resourceResponse).Frame;

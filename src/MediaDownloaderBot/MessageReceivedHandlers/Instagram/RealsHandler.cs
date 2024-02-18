@@ -29,7 +29,7 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
 
         public async Task NavigateOnPageAsync(IPage page)
         {
-            await page.WaitForSelectorAsync("article[role='presentation']");
+            await page.WaitForSelectorAsync("article[role='presentation']", new() { Timeout = 10 * 1000 });
 
             var forwardButtonSelector = "[role='presentation'] button[aria-label='Next']";
             IElementHandle? forwardButtonElement;
