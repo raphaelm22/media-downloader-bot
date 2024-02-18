@@ -2,14 +2,9 @@
 
 namespace MediaDownloaderBot.Commons
 {
-    internal class FileSystem : IFileSystem
+    internal class FileSystem(ILogger<FileSystem> logger) : IFileSystem
     {
-        readonly ILogger<FileSystem> _logger;
-
-        public FileSystem(ILogger<FileSystem> logger)
-        {
-            _logger = logger;
-        }
+        readonly ILogger<FileSystem> _logger = logger;
 
         public void SilenceDeleteFile(string path)
         {

@@ -7,25 +7,18 @@ using System.Text.Json;
 
 namespace MediaDownloaderBot.MessageReceivedHandlers.Youtube
 {
-    internal sealed class Handler : INotificationHandler<MessageReceived>
+    internal sealed class Handler(
+        ILogger<Handler> logger,
+        YoutubeUrlParser youtubeUrlParser,
+        IFileSystem fileSystem,
+        IHttpClientFactory httpClientFactory
+    ) : INotificationHandler<MessageReceived>
     {
 
-        readonly ILogger<Handler> _logger;
-        readonly YoutubeUrlParser _youtubeUrlParser;
-        readonly IFileSystem _fileSystem;
-        readonly HttpClient _httpClient;
-
-        public Handler(
-            ILogger<Handler> logger,
-            YoutubeUrlParser youtubeUrlParser,
-            IFileSystem fileSystem,
-            IHttpClientFactory httpClientFactory)
-        {
-            _logger = logger;
-            _youtubeUrlParser = youtubeUrlParser;
-            _fileSystem = fileSystem;
-            _httpClient = httpClientFactory.CreateClient("youtube");
-        }
+        readonly ILogger<Handler> _logger = logger;
+        readonly YoutubeUrlParser _youtubeUrlParser = youtubeUrlParser;
+        readonly IFileSystem _fileSystem = fileSystem;
+        readonly HttpClient _httpClient = httpClientFactory.CreateClient("youtube");
 
         public async Task Handle(MessageReceived notification, CancellationToken cancellationToken)
         {
@@ -34,7 +27,6 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.Youtube
                 if (!_youtubeUrlParser.TryParse(notification.Message, out var videoId)) return;
 
                 await notification.Reply.SendFindingVideoMessageAsync(cancellationToken);
-
 
                 await GetVideoInfoAsync(videoId, cancellationToken)
                     .Bind(response => ChoeseFormat(response, notification.Reply))

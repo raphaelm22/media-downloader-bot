@@ -7,29 +7,20 @@ using System.Diagnostics;
 
 namespace MediaDownloaderBot.MessageReceivedHandlers.TwitterVideoDownload
 {
-    internal sealed class Handler : INotificationHandler<MessageReceived>
+    internal sealed class Handler(
+        IPuppeteerBrowserFactory browserFactory,
+        Options options,
+        ILogger<Handler> logger,
+        TweetUrlParser tweetUrlParser,
+        IFileSystem fileSystem
+    ) : INotificationHandler<MessageReceived>
     {
 
-        readonly IPuppeteerBrowserFactory _browserFactory;
-        readonly Options _options;
-        readonly ILogger<Handler> _logger;
-        readonly TweetUrlParser _tweetUrlParser;
-        readonly IFileSystem _fileSystem;
-
-
-        public Handler(IPuppeteerBrowserFactory browserFactory,
-            Options options,
-            ILogger<Handler> logger,
-            TweetUrlParser tweetUrlParser,
-            IFileSystem fileSystem
-        )
-        {
-            _browserFactory = browserFactory;
-            _options = options;
-            _logger = logger;
-            _tweetUrlParser = tweetUrlParser;
-            _fileSystem = fileSystem;
-        }
+        readonly IPuppeteerBrowserFactory _browserFactory = browserFactory;
+        readonly Options _options = options;
+        readonly ILogger<Handler> _logger = logger;
+        readonly TweetUrlParser _tweetUrlParser = tweetUrlParser;
+        readonly IFileSystem _fileSystem = fileSystem;
 
         public async Task Handle(MessageReceived notification, CancellationToken cancellationToken)
         {
@@ -124,7 +115,6 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.TwitterVideoDownload
             return fileName;
         }
 
-
         async Task SendVideoAsync(string path, string postId, IReply reply, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Sending video...");
@@ -132,7 +122,6 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.TwitterVideoDownload
             using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
             await reply.SendVideoAsync(fileStream, $"{postId}.mp4", cancellationToken);
         }
-
         
         private async Task OnFailure(string message, IReply reply, CancellationToken cancellationToken)
         {
@@ -145,6 +134,5 @@ namespace MediaDownloaderBot.MessageReceivedHandlers.TwitterVideoDownload
             _logger.LogInformation("Video sent");
             return Task.CompletedTask;
         }
-
     }
 }

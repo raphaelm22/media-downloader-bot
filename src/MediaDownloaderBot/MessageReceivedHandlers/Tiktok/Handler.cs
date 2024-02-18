@@ -8,27 +8,20 @@ using System.Web;
 
 namespace MediaDownloaderBot.MessageReceivedHandlers.Tiktok
 {
-    internal sealed class Handler : INotificationHandler<MessageReceived>
+    internal sealed class Handler(
+        IPuppeteerBrowserFactory browserFactory,
+        Options options,
+        ILogger<Handler> logger,
+        IFileSystem fileSystem,
+        IHttpClientFactory httpClientFactory
+    ) : INotificationHandler<MessageReceived>
     {
 
-        readonly IPuppeteerBrowserFactory _browserFactory;
-        readonly Options _options;
-        readonly ILogger<Handler> _logger;
-        readonly HttpClient _httpClient;
-        readonly IFileSystem _fileSystem;
-
-        public Handler(IPuppeteerBrowserFactory browserFactory,
-            Options options,
-            ILogger<Handler> logger,
-            IFileSystem fileSystem,
-            IHttpClientFactory httpClientFactory)
-        {
-            _browserFactory = browserFactory;
-            _options = options;
-            _logger = logger;
-            _httpClient = httpClientFactory.CreateClient("tiktok");
-            _fileSystem = fileSystem;
-        }
+        readonly IPuppeteerBrowserFactory _browserFactory = browserFactory;
+        readonly Options _options = options;
+        readonly ILogger<Handler> _logger = logger;
+        readonly HttpClient _httpClient = httpClientFactory.CreateClient("tiktok");
+        readonly IFileSystem _fileSystem = fileSystem;
 
         public async Task Handle(MessageReceived notification, CancellationToken cancellationToken)
         {
