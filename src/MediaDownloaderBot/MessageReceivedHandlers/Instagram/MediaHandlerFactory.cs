@@ -1,15 +1,9 @@
 ﻿namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
 {
-    internal sealed class MediaHandlerFactory
+    internal sealed class MediaHandlerFactory(RealsHandler realsHandler, StorieHandler storieHandler)
     {
-        readonly RealsHandler _realsHandler;
-        readonly StorieHandler _storieHandler;
-
-        public MediaHandlerFactory(RealsHandler realsHandler, StorieHandler storieHandler)
-        {
-            _realsHandler = realsHandler;
-            _storieHandler = storieHandler;
-        }
+        readonly RealsHandler _realsHandler = realsHandler;
+        readonly StorieHandler _storieHandler = storieHandler;
 
         public IMediaHandler Create(InstagramUrl originUrl)
         {

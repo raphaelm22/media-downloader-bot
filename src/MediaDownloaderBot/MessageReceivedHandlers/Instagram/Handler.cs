@@ -7,35 +7,26 @@ using PuppeteerSharp;
 
 namespace MediaDownloaderBot.MessageReceivedHandlers.Instagram
 {
-    internal sealed class Handler : INotificationHandler<MessageReceived>
+    internal sealed class Handler(
+        IPuppeteerBrowserFactory browserFactory,
+        Options options,
+        ILogger<Handler> logger,
+        IFileSystem fileSystem,
+        IHttpClientFactory httpClientFactory,
+        InstagramUrlParser instagramUrlParser,
+        MediaHandlerFactory mediaHandlerFactory
+    ) : INotificationHandler<MessageReceived>
     {
 
         const string RequiresAuthenticationError = "Requires Authentication";
 
-        readonly IPuppeteerBrowserFactory _browserFactory;
-        readonly Options _options;
-        readonly ILogger<Handler> _logger;
-        readonly HttpClient _httpClient;
-        readonly IFileSystem _fileSystem;
-        readonly MediaHandlerFactory _mediaHandlerFactory;
-        readonly InstagramUrlParser _instagramUrlParser;
-
-        public Handler(IPuppeteerBrowserFactory browserFactory,
-            Options options,
-            ILogger<Handler> logger,
-            IFileSystem fileSystem,
-            IHttpClientFactory httpClientFactory,
-            InstagramUrlParser instagramUrlParser,
-            MediaHandlerFactory mediaHandlerFactory)
-        {
-            _browserFactory = browserFactory;
-            _options = options;
-            _logger = logger;
-            _httpClient = httpClientFactory.CreateClient("instagram");
-            _fileSystem = fileSystem;
-            _instagramUrlParser = instagramUrlParser;
-            _mediaHandlerFactory = mediaHandlerFactory;
-        }
+        readonly IPuppeteerBrowserFactory _browserFactory = browserFactory;
+        readonly Options _options = options;
+        readonly ILogger<Handler> _logger = logger;
+        readonly HttpClient _httpClient = httpClientFactory.CreateClient("instagram");
+        readonly IFileSystem _fileSystem = fileSystem;
+        readonly MediaHandlerFactory _mediaHandlerFactory = mediaHandlerFactory;
+        readonly InstagramUrlParser _instagramUrlParser = instagramUrlParser;
 
         public async Task Handle(MessageReceived notification, CancellationToken cancellationToken)
         {

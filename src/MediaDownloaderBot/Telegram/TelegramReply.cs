@@ -4,19 +4,12 @@ using Telegram.Bot.Types;
 
 namespace MediaDownloaderBot.Telegram
 {
-    internal class TelegramReply : IReply
+    internal class TelegramReply(TelegramBotClient telegramBotClient, ChatId chatId, int messageId) : IReply
     {
 
-        readonly TelegramBotClient _telegramBotClient;
-        readonly ChatId _chatId;
-        readonly int _messageId;
-
-        public TelegramReply(TelegramBotClient telegramBotClient, ChatId chatId, int messageId)
-        {
-            _telegramBotClient = telegramBotClient;
-            _chatId = chatId;
-            _messageId = messageId;
-        }
+        readonly TelegramBotClient _telegramBotClient = telegramBotClient;
+        readonly ChatId _chatId = chatId;
+        readonly int _messageId = messageId;
 
         public long VideoMaxLenght => 50 * 1024 * 1024;
 

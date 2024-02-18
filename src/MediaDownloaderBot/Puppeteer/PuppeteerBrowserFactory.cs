@@ -3,16 +3,10 @@ using PuppeteerSharp;
 
 namespace MediaDownloaderBot.Puppeteer
 {
-    internal class PuppeteerBrowserFactory : IPuppeteerBrowserFactory
+    internal class PuppeteerBrowserFactory(Options options, ILogger<PuppeteerBrowserFactory> logger) : IPuppeteerBrowserFactory
     {
-        readonly Options _options;
-        readonly ILogger _logger;
-
-        public PuppeteerBrowserFactory(Options options, ILogger<PuppeteerBrowserFactory> logger)
-        {
-            _options = options;
-            _logger = logger;
-        }
+        readonly Options _options = options;
+        readonly ILogger _logger = logger;
 
         public async Task<IBrowser> CreateAsync()
         {
